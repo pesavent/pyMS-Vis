@@ -326,7 +326,6 @@ class FileSelection(tk.Frame):
         def populate_entries(self):
             # timing start
             start_time = timeit.default_timer()
-            print('deconv_filearray',App.deconv_filearray)
             
             map_type_sel = self.map_optn.get()
 
@@ -351,7 +350,6 @@ class FileSelection(tk.Frame):
 
                 #make feature map filename to search and display when graphing
                 root_ext = os.path.splitext(App.deconv_filearray[i])
-                print('map type sel and root_ext',map_type_sel, root_ext)
                 if map_type_sel == '.feature':
                     map_filename = root_ext[0]+'.feature'
                 elif map_type_sel =='.ms1ft':
@@ -360,14 +358,12 @@ class FileSelection(tk.Frame):
                     map_filename = str(filedialog.askopenfilename(title="Please select the feature map corresponding to "+ext_filename, filetypes=[('All files','*.*')]))
                 else:
                     map_filename = ''
-                print('map_filename',map_filename)
                 App.feat_map_filenames.append(map_filename)
 
             # Get a single max ret time and scan time among all files loaded so that 
             # these values are used as default values for Static mode
             for filename in SearchParams.abrv_filenames:
                 root_ext = os.path.splitext(filename)
-                print('root',root_ext[0])
                 n=200 #stops if there are more than 200 lines without any ID or Retention Time text
                 pos = n+1
                 lines = []
@@ -450,14 +446,18 @@ class SearchParams(tk.Frame):
         self.search_mode.grid(row = 0, column = 3, sticky='e')
         self.search_mode_tip = Hovertip(self.search_mode, 'Static Mode is usually recommended for the first run. \nUse Dynamic Mode to specify retention time per file \nand masses of interest by range.', hover_delay=100)
         self.popupMenu.grid(row = 0, column = 4)
-        self.search_optn.trace('w',self.get_parameters)
+        self.search_optn.trace_add('write',self.get_parameters)
 
         # Mass Range Entry
         self.entry_frame = tk.Frame(self)
         self.entry_frame.grid(row=3, column = 0)
+        
+        #Radio and checkbox initiation for mass range option, mass tolerance (ppm or Da), or off-by-1-da search
         self.mass_range = IntVar()
-        self.v_but = IntVar()        # variable to detect radio button selection for ppm or Da mass tolerance
-        self.v_but.set(2)
+        self.mass_tol_button = IntVar()        # variable to detect radio button selection for ppm or Da mass tolerance
+        self.mass_tol_button.set(2)
+        self.offby1da_button = BooleanVar()        # variable to select if off-by-1-da search is desired
+        self.offby1da_button.set(False)
 
         # Mass tolerance frame
         self.mass_tol_frame = tk.Frame(self)
@@ -492,6 +492,7 @@ class SearchParams(tk.Frame):
         # In Static mode, entries = [('Start Scan', Entry), ('End Scan', Entry), ('Start ret. time', Entry), ('End ret. time', Entry), ('Masses', Entry), ('Mass Tolerance (Da)', Entry)]
         # In Dynamic mode, entries = [('Masses', Entry, Entry, Entry), ('Mass Error Tolerance', Entry)]
         # In Dynamic mode, dynamic_entries = ['filename.ext', ('Start ret. time', Entry), ('End ret. time', Entry), ...], where this info is provided per input file
+        # TODO: MUST INCLUDE AN 'OFFBY1DA' OPTION THAT ALSO FACTORS IN PPM ERROR
         SearchParams.entries = []
         SearchParams.dynamic_entries = []
         event = None
@@ -514,6 +515,7 @@ class SearchParams(tk.Frame):
         default_scan_end = self.static_scan_max
         default_ret_start = 0
         default_ret_end = self.static_retention_max
+        default_calibration = 0                     #assume instrument is calibrated
         """ -------------------- CHANGEABLE PARAMETERS END HERE -------------------- """
 
         # Dynamic mode default values are calculated based on Static mode default values (NOT recommended to change)
@@ -566,7 +568,7 @@ class SearchParams(tk.Frame):
             self.bind("<Motion>",lambda event, w=self.entry_frame: resizer(event,w))
 
             # input fields in Static Mode. the 'i' variable tells grid where to start displaying the entries
-            s_fields = ('Start scan', 'End scan', 'Start ret. time', 'End ret. time', 'Masses', 'Mass Error Tolerance')
+            s_fields = ('Start scan', 'End scan', 'Start ret. time', 'End ret. time', 'Masses', 'Mass Error Tolerance','Mass Calibration (ppm)','Off-by-1-Da search')
             i=3
 
             # for each entry in Static Mode, enter the field name and entry as a pair into SearchParams.entries
@@ -576,17 +578,26 @@ class SearchParams(tk.Frame):
                     ent = tk.Entry(self.mass_tol_frame, width=8)
                     lab.grid(row=0, column=0,sticky='w')
                     ent.grid(row=0, column=1,sticky='w')
-                    ppm_but = tk.Radiobutton(self.mass_tol_frame, text="ppm", variable=self.v_but, value=1)
-                    da_but = tk.Radiobutton(self.mass_tol_frame, text="Da", variable=self.v_but, value=2)
+                    ppm_but = tk.Radiobutton(self.mass_tol_frame, text="ppm", variable=self.mass_tol_button, value=1)
+                    da_but = tk.Radiobutton(self.mass_tol_frame, text="Da", variable=self.mass_tol_button, value=2)
                     ppm_but.grid(row=0, column=2,sticky='w')
                     da_but.grid(row=0, column=3,sticky='w')
+                elif field == 'Mass Calibration (ppm)':
+                    lab = tk.Label(self.mass_tol_frame, width=len(field)+5, text=field, anchor='e')
+                    ent = tk.Entry(self.mass_tol_frame, width=8)
+                    lab.grid(row=1, column=0,sticky='news')
+                    ent.grid(row=1, column=1,sticky='w')
+                elif field == 'Off-by-1-Da search':
+                    lab = tk.Label(self.mass_tol_frame, width=len(field)+5, text=field, anchor='e')
+                    ent = tk.Checkbutton(self.mass_tol_frame,  variable=self.offby1da_button)
+                    lab.grid(row=2, column=0,sticky='news')
+                    ent.grid(row=2, column=1,sticky='w')
                 else:
                     lab = tk.Label(self.entry_frame, width=len(field)+5, text=field, anchor='w')
                     ent = tk.Entry(self.entry_frame, width=8)
                     lab.grid(row=i, column=0,sticky='w')
                     ent.grid(row=i, column=1,sticky='w')                
                 ent.bind("<Key>", lambda event, ent=ent: resizer(event,ent))
-                mass_tolerance_tip= Hovertip(ent, 'Specify mass error tolerance.\nEither ppm or Da', hover_delay=100)
                 SearchParams.entries.append((field, ent))
                 i+=1
 
@@ -597,6 +608,8 @@ class SearchParams(tk.Frame):
             ret_end_tip = Hovertip(SearchParams.entries[3][1], 'Specify ending retention time (s) to be queried', hover_delay=100)       
             masses_tip = Hovertip(SearchParams.entries[4][1], 'List masses (Da) of interest. \nSeparate each mass with either \na space or a comma and a space.', hover_delay=100)
             mass_tolerance_tip= Hovertip(SearchParams.entries[5][1], 'Specify mass error tolerance. \nEither ppm or Da.', hover_delay=100)
+            mass_calibration_tip= Hovertip(SearchParams.entries[6][1], 'Enter any mass calibration adjustments (ppm).', hover_delay=100)
+            offbyoneda_tip= Hovertip(SearchParams.entries[7][1], 'Search of masses that are off \nby exactly 1 Da +/- mass tolerance.', hover_delay=100)
 
             # Inserts default parameters into entries (Static mode)
             self.entries[0][1].insert(0,default_scan_start)     # Start scan
@@ -605,6 +618,7 @@ class SearchParams(tk.Frame):
             self.entries[3][1].insert(0,default_ret_end)        # End ret. time
             self.entries[4][1].insert(0,default_masses)         # Masses
             self.entries[5][1].insert(0,default_tolerance)      # Mass Tolerance (ppm or Da)
+            self.entries[6][1].insert(0,default_calibration)    # Mass calibration (ppm)
             
         # In Dynamic Mode, recreate buttons and entry boxes
         if self.search_optn.get() == "Dynamic":
@@ -626,9 +640,9 @@ class SearchParams(tk.Frame):
 
             self.bind("<Motion>",lambda event, w=self.entry_frame: resizer(event,w))
 
-            # These lists contain only fields that are NOT affected by 'Search by mass range'
-            s_fields = ('Mass Error Tolerance',)                 # fields that appear in static mode that are not affected by Sbmr
-            d_fields = ('Start ret. time', 'End ret. time')     # fields that appear in dynamic mode that are not affected by Sbmr
+            # These lists contain only fields that are NOT affected by 'Search by Mass Range'
+            s_fields = ('Mass Error Tolerance','Mass Calibration (ppm)','Off-by-1-Da search')                 # fields that appear in static mode that are not affected by SbMR
+            d_fields = ('Start ret. time', 'End ret. time')     # fields that appear in dynamic mode that are not affected by SbMR
 
             # Search by mass range button
             self.mass_range_btn = tk.Checkbutton(self.mass_range_frame, text="Search by mass range: ", variable=self.mass_range, command=(lambda : change_range(self, self.mass_field_ent)))
@@ -661,17 +675,29 @@ class SearchParams(tk.Frame):
                     ent = tk.Entry(self.mass_tol_frame, width=8)
                     lab.grid(row=0, column=0,sticky='news')
                     ent.grid(row=0, column=1,sticky='w')
-                    ppm_but = tk.Radiobutton(self.mass_tol_frame, text="ppm", variable=self.v_but, value=1)
-                    da_but = tk.Radiobutton(self.mass_tol_frame, text="Da", variable=self.v_but, value=2)
+                    ppm_but = tk.Radiobutton(self.mass_tol_frame, text="ppm", variable=self.mass_tol_button, value=1)
+                    da_but = tk.Radiobutton(self.mass_tol_frame, text="Da", variable=self.mass_tol_button, value=2)
                     ppm_but.grid(row=0, column=2,sticky='w')
                     da_but.grid(row=0, column=3,sticky='w')
+                    mass_tolerance_tip= Hovertip(ent, 'Specify mass tolerance.\nEither ppm or Da', hover_delay=100)
+                elif field == 'Mass Calibration (ppm)':
+                    lab = tk.Label(self.mass_tol_frame, width=len(field)+5, text=field, anchor='e')
+                    ent = tk.Entry(self.mass_tol_frame, width=8)
+                    lab.grid(row=1, column=0,sticky='news')
+                    ent.grid(row=1, column=1,sticky='w')
+                    mass_calibration_tip= Hovertip(ent, 'Enter any mass calibration adjustments (ppm).', hover_delay=100)
+                elif field == 'Off-by-1-Da search':
+                    lab = tk.Label(self.mass_tol_frame, width=len(field)+5, text=field, anchor='e')
+                    ent = tk.Checkbutton(self.mass_tol_frame,  variable=self.offby1da_button,)
+                    lab.grid(row=2, column=0,sticky='news')
+                    ent.grid(row=2, column=1,sticky='w')
+                    offbyoneda_tip= Hovertip(ent, 'Search of masses that are off \nby exactly 1 Da +/- mass tolerance.', hover_delay=100)
                 else:
                     lab = tk.Label(self.entry_frame, width=len(field)+5, text=field, anchor='e')
                     ent = tk.Entry(self.entry_frame, width=8)
                     lab.grid(row=i, column=0,sticky='news')
                     ent.grid(row=i, column=1,sticky='w')
                 ent.bind("<Key>", lambda event, ent=ent: resizer(event,ent))
-                mass_tolerance_tip= Hovertip(ent, 'Specify mass tolerance.\nEither ppm or Da', hover_delay=100)
                 SearchParams.entries.append((field, ent))
                 i+=1
 
@@ -705,6 +731,7 @@ class SearchParams(tk.Frame):
             SearchParams.entries[0][2].insert(0,default_max)
             SearchParams.entries[0][3].insert(0,default_interval)
             SearchParams.entries[1][1].insert(0,default_tolerance)
+            SearchParams.entries[2][1].insert(0,default_calibration)
             # Start and End Ret. Times (per file)
             n = 0
             while (n < len(SearchParams.dynamic_entries)):              # going through every element of dynamic_entries, which has 3 elements per uploaded file
@@ -732,7 +759,7 @@ class SearchParams(tk.Frame):
         # Warning: Empty search parameter field
         if self.search_optn.get() == "Static":
             for entry in SearchParams.entries:
-                if len(entry[1].get()) == 0:
+                if (entry[0] != 'Off-by-1-Da search') and (len(entry[1].get()) == 0):
                     mb.showerror("Warning", "All search parameter fields must be filled out.")
                     error = True
                     break
@@ -744,7 +771,7 @@ class SearchParams(tk.Frame):
                 # entries = [('Masses', Entry obj, Entry obj, Entry obj), ('Mass Tolerance (Da)', Entry object)]
                 # where the Entry objects contain mass list / min mass, max mass, mass interval, and mass tolerance, respectively
             for entry in SearchParams.entries:
-                if len(entry[1].get()) == 0:
+                if (entry[0] != 'Off-by-1-Da search') and (len(entry[1].get()) == 0):
                     mb.showerror("Warning", "Please fill out all mass information.")
                     # mb.showerror("Warning", "All search parameter fields must be filled out.")
                     error = True
@@ -929,7 +956,7 @@ class SearchParams(tk.Frame):
              mb.showerror("Warning","File extension not .msalign or .tsv. Closing program.")
              sys().exit
         
-    # MASS_SELECTION(): given deconv dataframe array from process(), where
+    # MASS_SELECTION(): given deconv dataframe array from process(), where Pandas dataframe
     # decon_df = ['Index','ScanNum','RetentionTime','MonoisotopicMass','SumIntensity']
         # gathers parameter data from user input
         # converts all mass data (idx, val) from string to float
@@ -952,28 +979,31 @@ class SearchParams(tk.Frame):
             retention_max = float(SearchParams.entries[3][1].get())     # End Ret. Time
             input_masses = str(SearchParams.entries[4][1].get())        # Masses
             mass_tolerance = float(SearchParams.entries[5][1].get())    # Mass Tolerance (Da or ppm)
+            ppm_calibration = float(SearchParams.entries[6][1].get())   # Mass calibration here
 
         # OR Gather entries from parameters in Dynamic Mode
         if self.search_optn.get() == "Dynamic":
-            scan_min = 0                                                # Question: Do we want an entry for this per file?
-            scan_max = 30000                                            # same here
+            scan_min = 0                                                # Question: Do we want an entry for this per file? TODO later
+            scan_max = 30000                                            # same here TODO later
             retention_min = float((SearchParams.dynamic_entries[SearchParams.dynamic_counter][1]).get())
             retention_max = float((SearchParams.dynamic_entries[SearchParams.dynamic_counter+1][1]).get())
+            ppm_calibration = float(SearchParams.entries[2][1].get())   # Mass calibration here (ppm)
+            mass_tolerance = float(SearchParams.entries[1][1].get())    # Masses and Mass tolerance (Da)
+            
             SearchParams.dynamic_counter+=3
             if self.mass_range.get() == 1:                              # gather 'Search by mass range' data
                 min_mass = float(SearchParams.entries[0][1].get())
                 max_mass = float(SearchParams.entries[0][2].get())
                 mass_interval = float(SearchParams.entries[0][3].get())
-                mass_tolerance = float(SearchParams.entries[1][1].get())
                 input_masses = [min_mass]
                 temp_mass = min_mass
                 while temp_mass <= max_mass:
                     temp_mass+=mass_interval
                     input_masses.append(temp_mass)
-                input_masses = str(input_masses)                        # not sure
+                input_masses = str(input_masses)                       
             else:                                                       # if 'Search by masses' not selected
-                input_masses = str(SearchParams.entries[0][1].get())    # only additional data to gather is
-                mass_tolerance = float(SearchParams.entries[1][1].get())    # Masses and Mass tolerance (Da)
+                input_masses = str(SearchParams.entries[0][1].get())    # only additional data to gather is input masses
+
 
         #found_masses = []
         #graph_found_masses = []         # this array will pass on 0 intensity values for QC graphs
@@ -1002,17 +1032,27 @@ class SearchParams(tk.Frame):
 
         graph_req_columns=['RetentionTime','QueriedMass','MonoisotopicMass','SumIntensity','MassTolerance']
         trimmed_decon_df = decon_df[(decon_df['MonoisotopicMass']>masses.min()-1000) & (decon_df['MonoisotopicMass']<masses.max()+1000)] #huge savings in time limiting search space to max and min inputed mass values
+        trimmed_decon_df.loc[:,"MonoisotopicMass"] = trimmed_decon_df["MonoisotopicMass"]+trimmed_decon_df["MonoisotopicMass"]*ppm_calibration/10**6 #this allows the user to adjust FLASHDeconv mass list for instrument calibration issues (ppm)
+
         for i, row in trimmed_decon_df.iterrows():
             for mass in masses:
                 mass_tol = mass_tolerance
-                if self.v_but.get() == 1: #ppm search
+                if self.mass_tol_button.get() == 1: #ppm search
                     mass_tol = (mass*mass_tolerance)/10**6
                 if (mass - mass_tol) <= row['MonoisotopicMass'] <= (mass + mass_tol):
                     if scan_min <= row['ScanNum'] <= scan_max and retention_min <= row['RetentionTime'] <= retention_max:
                         temp_array = []
                         temp_array.extend((row['RetentionTime'],row['MonoisotopicMass'],row['SumIntensity']))
                         graph_found_masses_df.append([row['RetentionTime'],mass,row['MonoisotopicMass'],row['SumIntensity'],mass_tol]) #df 
-                
+                #this will add exactly off-by-1Da +/- ppm tolerance to the mass list if user selected the checkbutton
+                elif self.offby1da_button.get() and (((mass + mass_tol) > (row['MonoisotopicMass']+1.00235) > (mass - mass_tol)) or (mass + mass_tol > (row['MonoisotopicMass']-1.00235) > mass - mass_tol)): #off by 1 Da
+                    print('off by one!')
+                    if scan_min <= row['ScanNum'] <= scan_max and retention_min <= row['RetentionTime'] <= retention_max:
+                        temp_array = []
+                        temp_array.extend((row['RetentionTime'],row['MonoisotopicMass'],row['SumIntensity']))
+                        graph_found_masses_df.append([row['RetentionTime'],mass,row['MonoisotopicMass'],row['SumIntensity'],mass_tol]) #df        
+
+
         graph_found_masses_df = pd.DataFrame(graph_found_masses_df, columns=graph_req_columns)
         
         #need to add an empty all-zero value for any mass searched for, but not found
@@ -1133,7 +1173,6 @@ class QuantOutput(tk.Frame):
         grouped_data_avgstdev_df=grouped_data_avgstdev_df.reset_index()
         QCGraphs.grouped_data_avgstdev_df = grouped_data_avgstdev_df
         
-
         # the final product [[group1, [avg,stdev]],[group2, [avg,stdev],...]
         # will be sent to the same variable in the QCGraphs for graph creation
         self.output_quantification_file()
@@ -1171,6 +1210,8 @@ class QuantOutput(tk.Frame):
                         temp = (x+','+y+',')
                         out_file.write(temp)
                     out_file.write(" \n")
+                out_file.write(" \n")
+            QCGraphs.ms1_output_filename = filename
 
         # timing end
             total_time = timeit.default_timer() - start_time
@@ -1186,6 +1227,7 @@ This class contains the actual QC graphs so its only function is makegraph().
 """
 class QCGraphs(tk.Frame):
     total_qc_graph_array_df = [] #storage of dataframes
+    ms1_output_filename = ''
     
     def __init__(self, parent, controller):
         # QC Graphs Page creation & initialization
@@ -1263,7 +1305,6 @@ class QCGraphs(tk.Frame):
         color_selection = 0
         offset = 0.25
         for i,groupname in QCGraphs.grouped_data_avgstdev_df.groupby('GroupName'):
-            print('groupname',groupname)
             color_palette = Category20c[20]                             # color palette 
             if color_selection == 19:                                   # once all colors used, reset & cycle back
                 color_palette = Category20b[20]
@@ -1308,7 +1349,6 @@ class QCGraphs(tk.Frame):
 
             #for deconvoluted files that have multiple masses that meet the search criteria in a single scan (or ret time), they need to be summed to create
             #a single mass to be plotted
-            print('graph df',graph_df)
             for i, row in graph_df.iterrows():
                 if i<(len(graph_df)-1):
                     if row['QueriedMass'] == graph_df.iloc[i+1]['QueriedMass'] and row['RetentionTime'] == graph_df.iloc[i+1]['RetentionTime']:
@@ -1327,10 +1367,17 @@ class QCGraphs(tk.Frame):
                         mass_coord.append([ret_time,mass,monoisotopicmasses,temp_intensity])
                         monoisotopicmasses=[]
                         temp_intensity = 0
-                #print('mass coord',mass_coord)
+            
+            #the code below is for organizing the data so that the raw total intensity of all the ions across the entire LC window can be exported
             df_temp_columns = ['RetentionTime','QueriedMass','MonoisotopicMassesFound','TotalIntensity']
             df_temp=pd.DataFrame(mass_coord, columns=df_temp_columns)
-            #print('df_temp',df_temp)
+            df_output = df_temp.copy()
+            df_output['QueriedMass'] = df_output['QueriedMass'].astype(str)
+            df_output['FileName'] = ext_filename
+            df_output['SumTotalIntensity'] = df_output.groupby('QueriedMass')['TotalIntensity'].transform('sum')
+            df_output=pd.DataFrame(df_output, columns=['FileName','QueriedMass','SumTotalIntensity','RelativeIntensity']).drop_duplicates(subset=['QueriedMass'])
+            df_output['RelativeIntensity'] = (df_output['SumTotalIntensity']/df_output['SumTotalIntensity'].sum())*100
+            df_output.to_csv(self.ms1_output_filename, mode='a')
 
             legend_items = []
             masses_searched = pd.unique(df_temp['QueriedMass'])
@@ -1393,7 +1440,6 @@ class QCGraphs(tk.Frame):
         #Check for feature maps to display. If 'None' is selected, adjust output to maximize the QC graphs
         #Plots the graphs with the averaged plot on top and the two other graphs (histogram and feature map) next to each other below.
         feature_map = VisualizeMS1FT.make_feat_map_graphs()
-        print('feature_map', feature_map)
         if len(feature_map) == 0:
             graph_layout = layout([averaged_plot],[Tabs(tabs=tab, tabs_location='above', stylesheets=[stylesheet])],sizing_mode='scale_both')
             show(graph_layout)
@@ -1419,7 +1465,6 @@ class QCGraphs(tk.Frame):
 class VisualizeMS1FT():
     def make_feat_map_graphs():
         feat_map_graphs = []
-        print('App.feat_map_filenames',App.feat_map_filenames)
         for idx,file in enumerate(App.feat_map_filenames):
             if os.path.isfile(file):
                 df_feat_map = pd.read_csv(file,sep='\t')     # reads input file (tab delimited) into a pandas dataframe
