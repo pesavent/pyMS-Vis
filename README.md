@@ -16,10 +16,10 @@ A python script for the quantitation and visualization of MS1 data from proteomi
 7. Pay close attention to the IDLE Shell if the program becomes unresponsive. Please send any issues (with screenshots / system info) to me in order to get them resolved.
 
 # Example Data
-In the 'ExampleData' folder, we provide deconvoluted files and feature maps that were used in the manuscript. 
+In the 'ExampleData' folder, we provide deconvoluted files and feature maps that were used in the manuscript. Some of them are also used in the tutorial videos described below. 
 
 # Windows and MacOS Executable Files
 In the 'ExecutableFiles' folder, we provide several versions of pyMS-Vis that were compiled on different Windows and MacOS computers.  
 
 # Tutorial Videos
-We have provided tutorial videos that show how to generate deconvoluted files for pyMS-Vis, the basic operation of pyMS-Vis, and how to input and analyze multiple files. You can find the videos here: https://youtube.com/playlist?list=PLHCYiwnwP8oG4_lsdsfBp5llq-ap_GoHZ&si=WkvKIQcVQ6KsYu94
+We have provided tutorial videos that show how to generate deconvoluted files for pyMS-Vis, the basic and advanced operation of pyMS-Vis, and how to input and analyze multiple files. You can find the videos here: [https://tinyurl.com/pyMS-Vis]
